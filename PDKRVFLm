@@ -1,4 +1,4 @@
-%% 主脚本：运行模糊特征选择和PSO优化的KELM
+%% 主脚本：运行模糊特征选择和PSO优化的KRVFL
 clc; clear; close all;
 
 % 定义数据集
@@ -56,8 +56,8 @@ tic;
 fuzzy_time = toc;
 fprintf('模糊特征选择耗时: %.2f秒\n', fuzzy_time);
 
-%% KELM评估
-fprintf('\n=== 基于PSO优化的KELM特征评估（训练集优化，最少保留10个特征） ===\n');
+%% KRVFL评估
+fprintf('\n=== 基于PSO优化的KRVFL特征评估（训练集优化，最少保留10个特征） ===\n');
 config = struct(...
     'kernelType', 'poly', ...
     'xi', 0.01, ...
@@ -65,14 +65,14 @@ config = struct(...
     'maxIterations', 30, ...
     'verbose', true);
 
-[optimalFeatures, results, best_params] = evaluateWithKELM(...
+[optimalFeatures, results, best_params] = evaluateWithKRVFL(...
     X_train_norm, y_train_norm, selectedFeatures, config, nFeatures, min_y, max_y);
 
-% 使用最优特征子集训练最终KELM模型
+% 使用最优特征子集训练最终KRVFL模型
 X_train_opt = X_train_norm(:, optimalFeatures);
 X_test_opt = X_test_norm(:, optimalFeatures);
 
-% 训练最终KELM模型
+% 训练最终KRVFL模型
 C = max(best_params(1), 1e-6);
 kernel_type = config.kernelType;
 kernel_params = get_kernel_params(kernel_type, best_params(2), best_params(3)); % degree, theta
@@ -98,8 +98,8 @@ fprintf('TIC: %.4f\n', test_metrics.tic);
 fprintf('Willmott指数: %.4f\n', test_metrics.willmott_index);
 fprintf('样本数量: %d\n', n);
 
-%% 函数：KELM评估
-function [optimalFeatures, results, best_params] = evaluateWithKELM(...
+%% 函数：KRVFL评估
+function [optimalFeatures, results, best_params] = evaluateWithKRVFL(...
     X_train_norm, y_train_norm, selectedFeatures, config, m_original, min_y, max_y)
     
     totalFeatures = length(selectedFeatures);
@@ -139,7 +139,7 @@ function [optimalFeatures, results, best_params] = evaluateWithKELM(...
         % PSO优化 [C, degree, kernel_theta]
         lb = [0.1, 1, 0.01]; % C, degree, theta
         ub = [100, 5, 10];
-        fitness_func = @(params) evaluate_kelm(...
+        fitness_func = @(params) evaluate_KRVFL(...
             params, X_train_current, y_train_norm, X_train_current, y_train_norm, ...
             kernel_type, xi, m_original, min_y, max_y);
 
@@ -203,8 +203,8 @@ function [optimalFeatures, results, best_params] = evaluateWithKELM(...
         best_params(1), best_params(2), best_params(3));
 end
 
-%% 函数：KELM评估
-function fitness = evaluate_kelm(params, X_train, y_train, X_eval, y_eval, ...
+%% 函数：KRVFL评估
+function fitness = evaluate_KRVFL(params, X_train, y_train, X_eval, y_eval, ...
     kernel_type, xi, m_original, min_y, max_y)
     try
         C = params(1);
@@ -223,7 +223,7 @@ function fitness = evaluate_kelm(params, X_train, y_train, X_eval, y_eval, ...
             fitness = Inf;
         end
     catch e
-        fprintf('Error in evaluate_kelm: %s\n', e.message);
+        fprintf('Error in evaluate_KRVFL: %s\n', e.message);
         fitness = Inf;
     end
 end
