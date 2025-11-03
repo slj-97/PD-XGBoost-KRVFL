@@ -47,8 +47,8 @@ fprintf('训练集: %d个样本, 测试集: %d个样本\n', ...
 [X_train_norm, y_train_norm, X_test_norm, y_test_norm, ...
     min_y, max_y, min_y_test, max_y_test, min_x, max_x] = ...
     normalizeData(X_train, y_train, X_test, y_test);
-%% KELM评估（使用所有特征，训练集优化）
-fprintf('\n=== 基于PSO优化的KELM评估（使用所有特征，训练集优化） ===\n');
+%% KRVFL评估（使用所有特征，训练集优化）
+fprintf('\n=== 基于PSO优化的KRVFL评估（使用所有特征，训练集优化） ===\n');
 config = struct(...
     'kernelType', 'poly', ...
     'swarmSize', 20, ...
@@ -56,16 +56,16 @@ config = struct(...
     'verbose', true);
 
 tic;
-[best_params, results] = evaluateWithKELM(...
+[best_params, results] = evaluateWithKRVFL(...
     X_train_norm, y_train_norm, config, min_y, max_y);
 pso_time = toc;
-fprintf('PSO-KELM评估耗时: %.2f秒\n', pso_time);
+fprintf('PSO-KRVFL评估耗时: %.2f秒\n', pso_time);
 
-% 使用所有训练数据训练最终KELM模型
+% 使用所有训练数据训练最终KRVFL模型
 X_train_opt = X_train_norm; % 使用所有特征
 X_test_opt = X_test_norm; % 使用所有特征
 
-% 训练最终KELM模型
+% 训练最终KRVFL模型
 C = max(best_params(1), 1e-6);
 kernel_type = config.kernelType;
 kernel_params = get_kernel_params(kernel_type, best_params(2), best_params(3)); % degree, theta
@@ -91,8 +91,8 @@ fprintf('TIC: %.4f\n', test_metrics.tic);
 fprintf('Willmott指数: %.4f\n', test_metrics.willmott_index);
 fprintf('样本数量: %d\n', n);
 
-%% 函数：KELM评估（使用所有特征，训练集优化）
-function [best_params, results] = evaluateWithKELM(...
+%% 函数：KRVFL评估（使用所有特征，训练集优化）
+function [best_params, results] = evaluateWithKRVFL(...
     X_train_norm, y_train_norm, config, min_y, max_y)
     
     kernel_type = config.kernelType;
@@ -105,13 +105,13 @@ function [best_params, results] = evaluateWithKELM(...
         'UseParallel', true); 
 
     if config.verbose
-        fprintf('优化KELM参数，使用所有 %d 个特征...\n', size(X_train_norm, 2));
+        fprintf('优化KRVFL参数，使用所有 %d 个特征...\n', size(X_train_norm, 2));
     end
 
     % PSO优化 [C, degree, kernel_theta]
     lb = [0.1, 1, 0.01]; % C, degree, theta
     ub = [100, 5, 10];
-    fitness_func = @(params) evaluate_kelm(...
+    fitness_func = @(params) evaluate_KRVFL(...
         params, X_train_norm, y_train_norm, X_train_norm, y_train_norm, ...
         kernel_type, min_y, max_y);
 
@@ -149,7 +149,7 @@ function [best_params, results] = evaluateWithKELM(...
             best_fitness, results.RMSE, results.MAPE, results.MAE, results.SMAPE);
     end
 
-    fprintf('\n=== PSO-KELM结果（训练集优化） ===\n');
+    fprintf('\n=== PSO-KRVFL结果（训练集优化） ===\n');
     fprintf('总耗时: %.2f 秒\n', toc);
     fprintf('使用的特征数量: %d\n', size(X_train_norm, 2));
     fprintf('最优适应度值: %.4f\n', results.Fitness);
@@ -162,8 +162,8 @@ function [best_params, results] = evaluateWithKELM(...
         best_params(1), best_params(2), best_params(3));
 end
 
-%% 函数：KELM评估
-function fitness = evaluate_kelm(params, X_train, y_train, X_eval, y_eval, ...
+%% 函数：KRVFL评估
+function fitness = evaluate_KRVFL(params, X_train, y_train, X_eval, y_eval, ...
     kernel_type, min_y, max_y)
     try
         C = params(1);
@@ -181,7 +181,7 @@ function fitness = evaluate_kelm(params, X_train, y_train, X_eval, y_eval, ...
             fitness = Inf;
         end
     catch e
-        fprintf('Error in evaluate_kelm: %s\n', e.message);
+        fprintf('Error in evaluate_KRVFL: %s\n', e.message);
         fitness = Inf;
     end
 end
