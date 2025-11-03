@@ -36,10 +36,10 @@ function XGrunFeatureSelectionPipeline()
     % 转换为数值矩阵并标准化
     [X_train, y_train, X_test, y_test] = prepareData(trainData, testData);
 
-    %% 2. XGBoost-KELM评估
-    fprintf('\n=== 基于XGBoost-KELM的模型评估 ===\n');
+    %% 2. XGBoost-KRVFL评估
+    fprintf('\n=== 基于XGBoost-KRVFL的模型评估 ===\n');
 
-    % XGBoost-KELM配置
+    % XGBoost-KRVFL配置
     config = struct(...
         'kernelType',      'poly', ...
         'numExperiments',  1, ...             % 实验次数，增加实验次数以提高稳定性
@@ -51,16 +51,16 @@ function XGrunFeatureSelectionPipeline()
     % 使用所有特征（按原始顺序）
     selectedFeatures = 1:nFeatures;
     
-    % 执行XGBoost-KELM评估
+    % 执行XGBoost-KRVFL评估
     tic;
-    [optimalFeatures, results] = evaluateWithXGBoostKELM(...
+    [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
         X_train, y_train, X_test, y_test, selectedFeatures, config, size(X_train, 2));
     elapsed_time = toc;
-    fprintf('XGBoost-KELM评估耗时: %.2f秒\n', elapsed_time);
+    fprintf('XGBoost-KRVFL评估耗时: %.2f秒\n', elapsed_time);
 end
 
-%% ========== XGBoost-KELM评估函数 ==========
-function [optimalFeatures, results] = evaluateWithXGBoostKELM(...
+%% ========== XGBoost-KRVFL评估函数 ==========
+function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
     X_train, y_train, X_test, y_test, selectedFeatures, config, m_original)
 
     % 数据标准化
@@ -112,7 +112,7 @@ function [optimalFeatures, results] = evaluateWithXGBoostKELM(...
         'Display', 'off', ...
         'UseParallel', true); % 避免并行警告
 
-    fitness_func = @(params) evaluate_xgb_kelm_with_weight_selection(...
+    fitness_func = @(params) evaluate_xgb_KRVFL_with_weight_selection(...
         params, X_train_current, y_train_norm, X_test_current, y_test_norm, ...
         kernel_type, method_names, weight_methods, xi, m_original);
 
@@ -140,7 +140,7 @@ function [optimalFeatures, results] = evaluateWithXGBoostKELM(...
     alpha = compute_weights(E, best_method, weight_params, weight_methods);
     alpha = normalize_weights(alpha);
 
-    % 计算 KELM 输出
+    % 计算 KRVFL 输出
     H = compute_kernel_matrix(X_train_current, X_train_current, kernel_type, kernel_params);
     D = diag(1 ./ (C * alpha));
     beta = H' * pinv(H * H' + D) * y_train_norm;
@@ -207,8 +207,8 @@ function [optimalFeatures, results] = evaluateWithXGBoostKELM(...
         best_params_all(optimalIdx, 5));
 end
 
-%% ========== XGBoost-KELM评估函数 ==========
-function fitness = evaluate_xgb_kelm_with_weight_selection(params, X_train, y_train, X_test, y_test, kernel_type, method_names, weight_methods, xi, m_original)
+%% ========== XGBoost-KRVFL评估函数 ==========
+function fitness = evaluate_xgb_KRVFL_with_weight_selection(params, X_train, y_train, X_test, y_test, kernel_type, method_names, weight_methods, xi, m_original)
     try
         K = round(params(1));
         eta = params(2);
