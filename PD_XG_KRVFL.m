@@ -1,5 +1,5 @@
 function XGrunFeatureSelectionPipeline()
-    % 主函数：完整特征选择流程（集成XGBoost-KELM评估）
+    % 主函数：完整特征选择流程（集成XGBoost-KRVFL评估）
     % 优化版本：增强并行计算性能
     clc; clear; close all;
    
@@ -59,10 +59,10 @@ function XGrunFeatureSelectionPipeline()
     % 显示结果
     % displayResults(selectedFeatures, scores, trainData.Properties.VariableNames(1:end-1));
     
-    %% 4. XGBoost-KELM特征评估（核心修改部分）
-    fprintf('\n=== 基于XGBoost-KELM的特征评估 ===\n');
+    %% 4. XGBoost-KRVFL特征评估（核心修改部分）
+    fprintf('\n=== 基于XGBoost-KRVFL的特征评估 ===\n');
 
-    % XGBoost-KELM配置
+    % XGBoost-KRVFL配置
     config = struct(...
         'kernelType',      'poly', ...
         'numExperiments',  1, ...             % 实验次数，增加实验次数以提高稳定性
@@ -72,15 +72,15 @@ function XGrunFeatureSelectionPipeline()
         'verbose',       true    );         % 显示进度
                      % 使用waitbar显示进度;
     
-    % 执行XGBoost-KELM特征评估
-    [optimalFeatures, results] = evaluateWithXGBoostKELM(...
+    % 执行XGBoost-KRVFL特征评估
+    [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
         X_train, y_train, X_test, y_test, selectedFeatures, config,size(X_train, 2));
     
     % 显示最终结果
-    % displayXGBoostKELMResults(optimalFeatures, results, config);
+    % displayXGBoostKRVFLResults(optimalFeatures, results, config);
 end
-%% ========== XGBoost_KELM特征评估函数 ==========
-function [optimalFeatures, results] = evaluateWithXGBoostKELM(...
+%% ========== XGBoost_KRVFL特征评估函数 ==========
+function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
     X_train, y_train, X_test, y_test, selectedFeatures, config, m_original)
 
     % 数据标准化
@@ -133,7 +133,7 @@ function [optimalFeatures, results] = evaluateWithXGBoostKELM(...
             'Display', 'off', ...
             'UseParallel', false); % 避免并行警告
 
-        fitness_func = @(params) evaluate_xgb_kelm_with_weight_selection(...
+        fitness_func = @(params) evaluate_xgb_KRVFL_with_weight_selection(...
             params, X_train_current, y_train_norm, X_test_current, y_test_norm, ...
             kernel_type, method_names, weight_methods, xi, m_original);
 
@@ -161,7 +161,7 @@ function [optimalFeatures, results] = evaluateWithXGBoostKELM(...
         alpha = compute_weights(E, best_method, weight_params, weight_methods);
         alpha = normalize_weights(alpha);
 
-        % 计算 KELM 输出
+        % 计算 KRVFL 输出
         H = compute_kernel_matrix(X_train_current, X_train_current, kernel_type, kernel_params);
         D = diag(1 ./ (C * alpha));
         beta = H' * pinv(H * H' + D) * y_train_norm;
@@ -233,8 +233,8 @@ end
 
 
 
-%% XGBoost-KELM评估函数
-function fitness = evaluate_xgb_kelm_with_weight_selection(params, X_train, y_train, X_test, y_test, kernel_type, method_names, weight_methods, xi, m_original)
+%% XGBoost-KRVFL评估函数
+function fitness = evaluate_xgb_KRVFL_with_weight_selection(params, X_train, y_train, X_test, y_test, kernel_type, method_names, weight_methods, xi, m_original)
     try
         K = round(params(1));
         eta = params(2);
@@ -610,15 +610,15 @@ function w_norm = normalize_weights(w)
     end
 end
 
-% function displayXGBoostKELMResults(optimalFeatures, results, config)
-%     % 显示XGBoost-KELM特征选择结果并创建可视化图表
+% function displayXGBoostKRVFLResults(optimalFeatures, results, config)
+%     % 显示XGBoost-KRVFL特征选择结果并创建可视化图表
 %     % 参数:
 %     %   optimalFeatures - 最优特征的索引
 %     %   results - 包含各特征数量的性能指标结果表
 %     %   config - 运行配置参数
 % 
 %     % 1. 显示结果摘要
-%     fprintf('\n=== XGBoost-KELM特征选择可视化结果 ===\n');
+%     fprintf('\n=== XGBoost-KRVFL特征选择可视化结果 ===\n');
 %     fprintf('优化配置: 粒子数=%d, 最大迭代=%d\n', ...
 %         config.swarmSize, config.maxIterations);
 % 
@@ -637,7 +637,7 @@ end
 
     
     % % 4. 创建特征数量vs指标图表
-    % figure('Name', 'XGBoost-KELM Performance Metrics by Feature Count');
+    % figure('Name', 'XGBoost-KRVFL Performance Metrics by Feature Count');
     % 
     % % 4.1 RMSE图
     % subplot(2,2,1);
@@ -685,7 +685,7 @@ end
     % 
     % % 调整图形大小和布局
     % set(gcf, 'Position', [100, 100, 900, 700]);
-    % sgtitle('XGBoost-KELM Feature Selection Results');
+    % sgtitle('XGBoost-KRVFL Feature Selection Results');
     % 
     % % 5. 创建单一指标比较图
     % figure('Name', 'Optimal Feature Subset Metrics');
@@ -729,7 +729,7 @@ end
     % disp(results);
 % end
 
-% % 训练KELM模型
+% % 训练KRVFL模型
 % H = compute_kernel_matrix(X_train_current, X_train_current, kernel_type, kernel_params);
 % A = H * H' + eye(size(H,1)) / C;
 % [temp, ~] = pcg(A, y_train_norm, 1e-6, 100);
