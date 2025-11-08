@@ -1,20 +1,15 @@
 function XGrunFeatureSelectionPipeline()
-    % 主函数：完整特征选择流程（集成XGBoost-KRVFL评估）
-    % 优化版本：增强并行计算性能
     clc; clear; close all;
    
     
-    %% 1. 数据加载与预处理
-    % 读取数据（请替换为您的实际数据文件）
     data = readtable('Treasury.dat');
     disp('数据基本信息:');
     disp(head(data, 5));
     disp(['数据大小: ', num2str(size(data))]);
 
-    % 处理缺失值
     data = fillmissing(data, 'previous'); % 使用前向填充
 
-    % 处理异常值（使用Winsorization方法）
+    % 处理异常值
     numeric_data = data{:, vartype('numeric')};
     
     % 并行处理每列的异常值
@@ -40,7 +35,7 @@ function XGrunFeatureSelectionPipeline()
     [X_train, y_train, X_test, y_test] = prepareData(trainData, testData);
 
 
-    %% 3. 特征选择 (仅在训练集进行)
+    %% 3. 特征选择 
     fprintf('\n=== 开始特征选择流程 ===\n');
     
     % 参数设置
@@ -70,7 +65,7 @@ function XGrunFeatureSelectionPipeline()
         'swarmSize',       20, ...            % PSO粒子数
         'maxIterations',   30, ...            % PSO最大迭代
         'verbose',       true    );         % 显示进度
-                     % 使用waitbar显示进度;
+
     
     % 执行XGBoost-KRVFL特征评估
     [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
@@ -83,22 +78,18 @@ end
 function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
     X_train, y_train, X_test, y_test, selectedFeatures, config, m_original)
 
-    % 数据标准化
     [X_train_norm, y_train_norm, X_test_norm, y_test_norm, min_y, max_y] = ...
         normalizeData(X_train, y_train, X_test, y_test);
 
-    % 定义权重方法（仅保留TBW）
     weight_methods = struct('TBW', @(E, params) threshold_weights(E, params.theta));
     method_names = {'TBW'};
 
-    % 参数与初始设置
     totalFeatures = length(selectedFeatures);
     kernel_type = config.kernelType;
     xi = config.xi;
     minFeatures = min(15, totalFeatures); 
     num_steps = totalFeatures - minFeatures + 1;
 
-    % 初始化结果存储，包含所有七个指标
     all_metrics = struct('rmse', zeros(1, num_steps), ...
                          'mape', zeros(1, num_steps), ...
                          'mae', zeros(1, num_steps), ...
@@ -110,10 +101,8 @@ function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
     fprintf('初始特征数: %d\n', totalFeatures);
     tic;
 
-    % 存储最佳超参数（用于最终输出）
     best_params_all = zeros(num_steps, 5); % 保存每轮特征数的超参数
 
-    % 特征数量递减搜索
     for numFeat = totalFeatures:-1:minFeatures
         currentFeat = selectedFeatures(1:numFeat);
         X_train_current = X_train_norm(:, currentFeat);
@@ -122,8 +111,6 @@ function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
         if config.verbose
             fprintf('评估 %2d/%2d 特征...\n', numFeat, totalFeatures);
         end
-
-        % PSO 参数优化
         lb = [10, 0.05, 0.1, 1, 0.01];
         ub = [200, 0.5, 100, 5, 10];
         nvars = 5;
@@ -131,7 +118,7 @@ function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
             'SwarmSize', config.swarmSize, ...
             'MaxIterations', config.maxIterations, ...
             'Display', 'off', ...
-            'UseParallel', false); % 避免并行警告
+            'UseParallel', false); 
 
         fitness_func = @(params) evaluate_xgb_KRVFL_with_weight_selection(...
             params, X_train_current, y_train_norm, X_test_current, y_test_norm, ...
@@ -139,29 +126,24 @@ function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
 
         best_params = particleswarm(fitness_func, nvars, lb, ub, pso_options);
 
-        % 存储超参数
         idx = totalFeatures - numFeat + 1;
         best_params_all(idx, :) = best_params;
 
-        % 解码最优参数
         K = round(best_params(1));
         eta = best_params(2);
         C = best_params(3);
         kernel_params = get_kernel_params(kernel_type, best_params(4), best_params(5));
         best_method = 'TBW';
 
-        % 训练 XGBoost
         mdl_xgb = fitrensemble(X_train_current, y_train_norm, ...
             'Method', 'LSBoost', 'NumLearningCycles', K, 'LearnRate', eta);
         y_pred_xgb = predict(mdl_xgb, X_train_current);
 
-        % 计算权重
         E = (y_train_norm - y_pred_xgb).^2;
         weight_params = get_weight_params(best_method, E);
         alpha = compute_weights(E, best_method, weight_params, weight_methods);
         alpha = normalize_weights(alpha);
 
-        % 计算 KRVFL 输出
         H = compute_kernel_matrix(X_train_current, X_train_current, kernel_type, kernel_params);
         D = diag(1 ./ (C * alpha));
         beta = H' * pinv(H * H' + D) * y_train_norm;
@@ -188,8 +170,7 @@ function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
     end
 
     elapsed_time = toc;
-
-    % 计算适应度
+ 
     numFeatVec = (totalFeatures:-1:minFeatures)';
     fitness = all_metrics.rmse' + xi * (numFeatVec / m_original);
 
@@ -230,10 +211,6 @@ function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
 end
 
    
-
-
-
-%% XGBoost-KRVFL评估函数
 function fitness = evaluate_xgb_KRVFL_with_weight_selection(params, X_train, y_train, X_test, y_test, kernel_type, method_names, weight_methods, xi, m_original)
     try
         K = round(params(1));
@@ -252,7 +229,6 @@ function fitness = evaluate_xgb_KRVFL_with_weight_selection(params, X_train, y_t
         H = compute_kernel_matrix(X_train, X_train, kernel_type, kernel_params);
         D = diag(1 ./ (C * alpha));
         beta = H' * pinv(H * H' + D) * y_train;
-        % 使用训练集计算RMSE（修复潜在问题1）
         H_train = compute_kernel_matrix(X_train, X_train, kernel_type, kernel_params);
         y_pred_norm = H_train * beta;
         y_pred = y_pred_norm * (max_y - min_y) + min_y;
@@ -267,7 +243,6 @@ function fitness = evaluate_xgb_KRVFL_with_weight_selection(params, X_train, y_t
         fitness = Inf;
     end
 end
-%% 模糊特征选择函数（优化并行计算）
 function [selectedFeatures, scores] = FuzzyFeatureSelection(X, y, params)
     % 参数检查
     if nargin < 3, params = struct(); end
@@ -277,11 +252,11 @@ function [selectedFeatures, scores] = FuzzyFeatureSelection(X, y, params)
     use_parallel = getParam(params, 'parallel', false);
     [n, m] = size(X);
     
-    %% 1. 计算固定邻域（sqrt(n)）
+ 
     K = floor(sqrt(n));
     fprintf('使用固定邻域大小 K=%d\n', K);
     
-    %% 2. 构建模糊可能性分布
+
     fprintf('计算模糊可能性分布...\n');
     Pi = zeros(n, m+1); % 最后一列是目标变量
     
@@ -610,127 +585,3 @@ function w_norm = normalize_weights(w)
     end
 end
 
-% function displayXGBoostKRVFLResults(optimalFeatures, results, config)
-%     % 显示XGBoost-KRVFL特征选择结果并创建可视化图表
-%     % 参数:
-%     %   optimalFeatures - 最优特征的索引
-%     %   results - 包含各特征数量的性能指标结果表
-%     %   config - 运行配置参数
-% 
-%     % 1. 显示结果摘要
-%     fprintf('\n=== XGBoost-KRVFL特征选择可视化结果 ===\n');
-%     fprintf('优化配置: 粒子数=%d, 最大迭代=%d\n', ...
-%         config.swarmSize, config.maxIterations);
-% 
-%     % 2. 获取最优特征数量和对应的索引位置
-%     [~, optimalIdx] = min(results.Fitness);
-%     optimalNumFeatures = results.NumFeatures(optimalIdx);
-% 
-%     % 3. 打印最优特征详情
-%     fprintf('最优特征子集: %d 个特征\n', optimalNumFeatures);
-% fprintf('最优特征索引: %s\n', mat2str(optimalFeatures));
-% fprintf('最优性能指标:\n');
-% fprintf('  RMSE:  %.4f\n', results.RMSE(optimalIdx));
-% fprintf('  MAPE:  %.4f%%\n', results.MAPE(optimalIdx));
-% fprintf('  MAE:   %.4f\n', results.MAE(optimalIdx));
-% fprintf('  SMAPE: %.4f\n', results.SMAPE(optimalIdx));
-
-    
-    % % 4. 创建特征数量vs指标图表
-    % figure('Name', 'XGBoost-KRVFL Performance Metrics by Feature Count');
-    % 
-    % % 4.1 RMSE图
-    % subplot(2,2,1);
-    % errorbar(results.NumFeatures, results.RMSE, results.RMSE_Std, 'b-o', 'LineWidth', 1.5);
-    % hold on;
-    % plot(optimalNumFeatures, results.RMSE(optimalIdx), 'r*', 'MarkerSize', 10);
-    % hold off;
-    % grid on;
-    % title('RMSE vs Feature Count');
-    % xlabel('Number of Features');
-    % ylabel('RMSE');
-    % 
-    % % 4.2 MAPE图
-    % subplot(2,2,2);
-    % errorbar(results.NumFeatures, results.MAPE, results.MAPE_Std, 'g-o', 'LineWidth', 1.5);
-    % hold on;
-    % plot(optimalNumFeatures, results.MAPE(optimalIdx), 'r*', 'MarkerSize', 10);
-    % hold off;
-    % grid on;
-    % title('MAPE vs Feature Count');
-    % xlabel('Number of Features');
-    % ylabel('MAPE (%)');
-    % 
-    % % 4.3 MAE图
-    % subplot(2,2,3);
-    % errorbar(results.NumFeatures, results.MAE, results.MAE_Std, 'm-o', 'LineWidth', 1.5);
-    % hold on;
-    % plot(optimalNumFeatures, results.MAE(optimalIdx), 'r*', 'MarkerSize', 10);
-    % hold off;
-    % grid on;
-    % title('MAE vs Feature Count');
-    % xlabel('Number of Features');
-    % ylabel('MAE');
-    % 
-    % % 4.4 适应度图
-    % subplot(2,2,4);
-    % plot(results.NumFeatures, results.Fitness, 'k-o', 'LineWidth', 1.5);
-    % hold on;
-    % plot(optimalNumFeatures, results.Fitness(optimalIdx), 'r*', 'MarkerSize', 10);
-    % hold off;
-    % grid on;
-    % title('Fitness vs Feature Count');
-    % xlabel('Number of Features');
-    % ylabel('Fitness Value');
-    % 
-    % % 调整图形大小和布局
-    % set(gcf, 'Position', [100, 100, 900, 700]);
-    % sgtitle('XGBoost-KRVFL Feature Selection Results');
-    % 
-    % % 5. 创建单一指标比较图
-    % figure('Name', 'Optimal Feature Subset Metrics');
-    % 
-    % % 设置柱状图数据
-    % metric_labels = {'RMSE', 'MAPE (%)', 'MAE', 'SMAE'};
-    % metric_values = [
-    %     results.RMSE(optimalIdx), 
-    %     results.MAPE(optimalIdx), 
-    %     results.MAE(optimalIdx), 
-    %     results.SMAE(optimalIdx)
-    % ]; 
-    % metric_errors = [
-    %     results.RMSE_Std(optimalIdx), 
-    %     results.MAPE_Std(optimalIdx), 
-    %     results.MAE_Std(optimalIdx), 
-    %     results.SMAE_Std(optimalIdx)
-    % ];
-    % 
-    % % 绘制带误差线的柱状图
-    % bar(1:4, metric_values);
-    % hold on;
-    % errorbar(1:4, metric_values, zeros(size(metric_errors)), metric_errors, '.k');
-    % hold off;
-    % 
-    % % 设置图形属性
-    % set(gca, 'XTick', 1:4, 'XTickLabel', metric_labels);
-    % title(['最优特征子集 (', num2str(optimalNumFeatures), ' 个特征) 性能指标']);
-    % ylabel('指标值');
-    % grid on;
-    % 
-    % % 注释最优值
-    % for i = 1:4
-    %     text(i, metric_values(i) + metric_errors(i) + 0.01, ...
-    %         sprintf('%.4f ± %.4f', metric_values(i), metric_errors(i)), ...
-    %         'HorizontalAlignment', 'center');
-    % end
-    % 
-    % % 6. 打印特征数量与适应度关系表格
-    % fprintf('\n特征数量与评估指标关系表:\n');
-    % disp(results);
-% end
-
-% % 训练KRVFL模型
-% H = compute_kernel_matrix(X_train_current, X_train_current, kernel_type, kernel_params);
-% A = H * H' + eye(size(H,1)) / C;
-% [temp, ~] = pcg(A, y_train_norm, 1e-6, 100);
-% beta = H' * temp;(备用)
