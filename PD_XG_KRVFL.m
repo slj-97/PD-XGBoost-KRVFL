@@ -54,7 +54,7 @@ function XGrunFeatureSelectionPipeline()
     % 显示结果
     % displayResults(selectedFeatures, scores, trainData.Properties.VariableNames(1:end-1));
     
-    %% 4. XGBoost-KRVFL特征评估（核心修改部分）
+    %% 4. XGBoost-KRVFL特征评估
     fprintf('\n=== 基于XGBoost-KRVFL的特征评估 ===\n');
 
     % XGBoost-KRVFL配置
@@ -87,7 +87,7 @@ function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
     totalFeatures = length(selectedFeatures);
     kernel_type = config.kernelType;
     xi = config.xi;
-    minFeatures = min(15, totalFeatures); 
+    minFeatures = min(1, totalFeatures); 
     num_steps = totalFeatures - minFeatures + 1;
 
     all_metrics = struct('rmse', zeros(1, num_steps), ...
@@ -101,7 +101,7 @@ function [optimalFeatures, results] = evaluateWithXGBoostKRVFL(...
     fprintf('初始特征数: %d\n', totalFeatures);
     tic;
 
-    best_params_all = zeros(num_steps, 5); % 保存每轮特征数的超参数
+    best_params_all = zeros(num_steps, 5); 
 
     for numFeat = totalFeatures:-1:minFeatures
         currentFeat = selectedFeatures(1:numFeat);
@@ -560,28 +560,6 @@ function alpha = compute_weights(E, method, params, weight_methods)
     end
 end
 
-function params = get_weight_params(method, E)
-    switch method
-        case 'TBW'
-            params.theta = prctile(E, 50);
-        otherwise
-            params = struct();
-    end
-end
 
-function w = threshold_weights(E, theta)
-    w = ones(size(E));
-    mask = E > theta;
-    w(mask) = theta ./ E(mask);
-end
 
-function w_norm = normalize_weights(w)
-    w_min = min(w);
-    w_max = max(w);
-    if w_min == w_max
-        w_norm = ones(size(w));
-    else
-        w_norm = 0.1 + 0.9 * (w - w_min) / (w_max - w_min);
-    end
-end
 
