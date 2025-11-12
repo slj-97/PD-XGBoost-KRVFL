@@ -539,26 +539,7 @@ function [X_train, y_train, X_test, y_test] = prepareData(trainData, testData)
     y_test = testMatrix(:, end);
 end
 
-function params = get_kernel_params(kernel_type, param1, param2)
-    switch kernel_type
-        case 'poly'
-            params = struct('degree', round(param1), 'theta', param2);
-        case 'rbf'
-            params = struct('sigma', param1);
-        case 'linear'
-            params = struct();
-        otherwise
-            error('未知的核函数类型');
-    end
-end
 
-function alpha = compute_weights(E, method, params, weight_methods)
-    if isfield(weight_methods, method)
-        alpha = weight_methods.(method)(E, params);
-    else
-        error('未知的权重方法');
-    end
-end
 
 
 
